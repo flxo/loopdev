@@ -68,26 +68,26 @@ fn attach_a_backing_file(offset: u64, sizelimit: u64, file_size: i64) {
 
         let file = create_backing_file(file_size);
         let file_path = file.to_path_buf();
-        let mut ld0 = lc
+        let mut ld = lc
             .next_free()
             .expect("should not error finding the next free loopback device");
 
-        ld0.with()
+        ld.with()
             .offset(offset)
             .size_limit(sizelimit)
             .attach(&file)
             .expect("should not error attaching the backing file to the loopdev");
 
-        let devices = list_device(Some(ld0.path().unwrap().to_str().unwrap()));
+        let devices = list_device(Some(ld.path().unwrap().to_str().unwrap()));
         file.close().expect("should delete the temp backing file");
 
-        (devices, ld0.path().unwrap(), file_path)
+        (devices, ld.path().unwrap(), file_path)
     };
 
     assert_eq!(
         devices.len(),
         1,
-        "there should be only one loopback mounted device"
+        "there should be only one loopback is the device list"
     );
     assert_eq!(
         devices[0].name.as_str(),
@@ -150,17 +150,16 @@ fn detach_a_backing_file(offset: u64, sizelimit: u64, file_size: i64) {
 
     {
         let file = create_backing_file(file_size);
-        attach_file(
-            "/dev/loop0",
+        let device = attach_file(
             file.to_path_buf().to_str().unwrap(),
             offset,
             sizelimit,
         );
 
-        let ld0 = LoopDevice::open("/dev/loop0")
+        let ld = LoopDevice::open(device)
             .expect("should be able to open the created loopback device");
 
-        ld0.detach()
+        ld.detach()
             .expect("should not error detaching the backing file from the loopdev");
 
         file.close().expect("should delete the temp backing file");

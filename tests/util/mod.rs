@@ -2,6 +2,7 @@ use libc::fallocate;
 use serde::{Deserialize, Deserializer};
 use std::io;
 use std::os::unix::io::AsRawFd;
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -30,10 +31,21 @@ pub fn setup() -> MutexGuard<'static, ()> {
     lock
 }
 
-pub fn attach_file(loop_dev: &str, backing_file: &str, offset: u64, sizelimit: u64) {
-    if !Command::new("losetup")
+pub fn attach_file(backing_file: &str, offset: u64, sizelimit: u64) -> PathBuf {
+    let loop_dev = Command::new("losetup")
+        .arg("-f")
+        .output()
+        .map(|output| {
+            assert!(output.status.success());
+            output
+        })
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .map(|o| PathBuf::from(o.trim()))
+        .expect("failed to find free loop device");
+
+    Command::new("losetup")
+        .arg(&loop_dev)
         .args(&[
-            loop_dev,
             backing_file,
             "--offset",
             &offset.to_string(),
@@ -41,11 +53,11 @@ pub fn attach_file(loop_dev: &str, backing_file: &str, offset: u64, sizelimit: u
             &sizelimit.to_string(),
         ])
         .status()
-        .expect("failed to attach backing file to loop device")
-        .success()
-    {
-        panic!("failed to cleanup existing loop devices")
-    }
+        .map(|status| assert!(status.success()))
+        .expect("failed to attach backing file to loop device");
+
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    loop_dev
 }
 
 pub fn detach_all() {
